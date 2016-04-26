@@ -42,6 +42,7 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 
 import static com.facebook.presto.metadata.FunctionKind.SCALAR;
+import static com.facebook.presto.metadata.Signature.withVariadicBound;
 import static com.facebook.presto.operator.scalar.JsonOperators.JSON_FACTORY;
 import static com.facebook.presto.spi.StandardErrorCode.INVALID_CAST_ARGUMENT;
 import static com.facebook.presto.spi.function.OperatorType.CAST;
@@ -57,6 +58,7 @@ import static com.facebook.presto.spi.type.DoubleType.DOUBLE;
 import static com.facebook.presto.spi.type.IntegerType.INTEGER;
 import static com.facebook.presto.spi.type.RealType.REAL;
 import static com.facebook.presto.spi.type.SmallintType.SMALLINT;
+import static com.facebook.presto.spi.type.StandardTypes.DECIMAL;
 import static com.facebook.presto.spi.type.TinyintType.TINYINT;
 import static com.facebook.presto.spi.type.TypeSignature.parseTypeSignature;
 import static com.facebook.presto.spi.type.UnscaledDecimal128Arithmetic.compareAbsolute;
@@ -162,6 +164,9 @@ public final class DecimalCasts
         Signature signature = Signature.builder()
                 .kind(SCALAR)
                 .operatorType(CAST)
+                .typeVariableConstraints(withVariadicBound("X", DECIMAL))
+                .argumentTypes(from)
+                .returnType(parseTypeSignature("X"))
                 .argumentTypes(from)
                 .returnType(parseTypeSignature("decimal(precision,scale)", ImmutableSet.of("precision", "scale")))
                 .build();
