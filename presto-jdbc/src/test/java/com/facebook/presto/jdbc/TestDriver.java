@@ -1335,11 +1335,11 @@ public class TestDriver
         }
     }
 
-    @Test(expectedExceptions = SQLException.class, expectedExceptionsMessageRegExp = "Connection property/URL parameter user is required")
+    @Test(expectedExceptions = SQLException.class, expectedExceptionsMessageRegExp = "Username property \\(user\\) must be set")
     public void testUserIsRequired()
             throws Exception
     {
-        try (Connection ignored = DriverManager.getConnection(format("jdbc:presto://%s", server.getAddress()))) {
+        try (Connection ignored = DriverManager.getConnection("jdbc:presto://test.invalid/")) {
             fail("expected exception");
         }
     }

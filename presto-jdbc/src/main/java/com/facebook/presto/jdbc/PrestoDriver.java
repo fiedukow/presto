@@ -19,7 +19,7 @@ import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.cache.RemovalListener;
 import com.google.common.cache.RemovalNotification;
-import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import io.airlift.http.client.jetty.JettyIoPool;
 import io.airlift.http.client.jetty.JettyIoPoolConfig;
 
@@ -30,6 +30,7 @@ import java.sql.DriverManager;
 import java.sql.DriverPropertyInfo;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -39,8 +40,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
 
-import static com.facebook.presto.jdbc.ConnectionProperties.USER;
 import static com.google.common.base.Preconditions.checkState;
+import static com.google.common.base.Strings.isNullOrEmpty;
 import static io.airlift.concurrent.Threads.daemonThreadsNamed;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
@@ -57,13 +58,17 @@ public class PrestoDriver
     static final String DRIVER_NAME = "Presto JDBC Driver";
     static final String DRIVER_VERSION = VERSION_MAJOR + "." + VERSION_MINOR;
 
+    private static final DriverPropertyInfo[] DRIVER_PROPERTY_INFOS = {};
+
     private static final String DRIVER_URL_START = "jdbc:presto:";
+
+    private static final String USER_PROPERTY = "user";
 
     private final AtomicBoolean closed = new AtomicBoolean(false);
 
     private final JettyIoPool jettyIoPool;
 
-    private final ReferenceCountingLoadingCache<HttpClientCreator, QueryExecutor> queryExecutorCache;
+    private final ReferenceCountingLoadingCache<Map<Object, Object>, QueryExecutor> queryExecutorCache;
 
     static {
         try {
@@ -361,11 +366,11 @@ public class PrestoDriver
     {
         this.jettyIoPool = new JettyIoPool("presto-jdbc", new JettyIoPoolConfig());
         this.queryExecutorCache = new ReferenceCountingLoadingCache<>(
-                new CacheLoader<HttpClientCreator, QueryExecutor>() {
+                new CacheLoader<Map<Object, Object>, QueryExecutor>() {
                     @Override
-                    public QueryExecutor load(HttpClientCreator clientCreator)
+                    public QueryExecutor load(Map<Object, Object> clientProperties)
                     {
-                        return QueryExecutor.create(clientCreator.create(QueryExecutor.baseClientConfig()));
+                        return QueryExecutor.create(DRIVER_NAME + "/" + DRIVER_VERSION, jettyIoPool);
                     }
                 },
                 QueryExecutor::close);
@@ -380,8 +385,17 @@ public class PrestoDriver
         }
     }
 
+    private static Map<Object, Object> filterClientProperties(Properties connectionProperties)
+    {
+        /*
+         * TODO: Once there are client-specifc properties, return the subset of
+         * connectionProperties that is client-specific.
+         */
+        return ImmutableMap.copyOf(connectionProperties);
+    }
+
     @Override
-    public Connection connect(String url, Properties driverProperties)
+    public Connection connect(String url, Properties connectionProperties)
             throws SQLException
     {
         if (closed.get()) {
@@ -392,18 +406,19 @@ public class PrestoDriver
             return null;
         }
 
-        PrestoConnectionConfig uri = new PrestoConnectionConfig(url, driverProperties);
-        String user = USER.getValue(uri.getConnectionProperties()).get();
+        String user = connectionProperties.getProperty(USER_PROPERTY);
+        if (isNullOrEmpty(user)) {
+            throw new SQLException(format("Username property (%s) must be set", USER_PROPERTY));
+        }
 
-        HttpClientCreator clientCreator = uri.getCreator(DRIVER_NAME + "/" + DRIVER_VERSION, jettyIoPool);
-
-        QueryExecutor queryExecutor = queryExecutorCache.acquire(clientCreator);
-        return new PrestoConnection(uri, user, queryExecutor) {
+        Map<Object, Object> clientProperties = filterClientProperties(connectionProperties);
+        QueryExecutor queryExecutor = queryExecutorCache.acquire(clientProperties);
+        return new PrestoConnection(new PrestoDriverUri(url), user, queryExecutor) {
             @Override
             public void close()
                     throws SQLException
             {
-                queryExecutorCache.release(clientCreator);
+                queryExecutorCache.release(clientProperties);
                 super.close();
             }
         };
@@ -417,18 +432,10 @@ public class PrestoDriver
     }
 
     @Override
-    public DriverPropertyInfo[] getPropertyInfo(String url, Properties driverProperties)
+    public DriverPropertyInfo[] getPropertyInfo(String url, Properties info)
             throws SQLException
     {
-        PrestoConnectionConfig uri = new PrestoConnectionConfig(url, driverProperties);
-        ImmutableList.Builder<DriverPropertyInfo> result = ImmutableList.builder();
-
-        Properties mergedProperties = uri.getConnectionProperties();
-        for (ConnectionProperty property : ConnectionProperties.allOf()) {
-            result.add(property.getDriverPropertyInfo(mergedProperties));
-        }
-
-        return result.build().toArray(new DriverPropertyInfo[0]);
+        return DRIVER_PROPERTY_INFOS;
     }
 
     @Override

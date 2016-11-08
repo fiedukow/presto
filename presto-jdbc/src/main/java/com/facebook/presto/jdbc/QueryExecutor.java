@@ -18,10 +18,13 @@ import com.facebook.presto.client.QueryResults;
 import com.facebook.presto.client.QuerySubmission;
 import com.facebook.presto.client.ServerInfo;
 import com.facebook.presto.client.StatementClient;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.net.HostAndPort;
 import io.airlift.http.client.HttpClient;
 import io.airlift.http.client.HttpClientConfig;
 import io.airlift.http.client.Request;
+import io.airlift.http.client.jetty.JettyHttpClient;
+import io.airlift.http.client.jetty.JettyIoPool;
 import io.airlift.json.JsonCodec;
 import io.airlift.units.Duration;
 
@@ -82,11 +85,14 @@ class QueryExecutor
         close();
     }
 
-    static HttpClientConfig baseClientConfig()
+    static QueryExecutor create(String userAgent, JettyIoPool jettyIoPool)
     {
-        return new HttpClientConfig()
-                .setConnectTimeout(new Duration(10, TimeUnit.SECONDS))
-                .setSocksProxy(getSystemSocksProxy());
+        return create(new JettyHttpClient(
+                new HttpClientConfig()
+                        .setConnectTimeout(new Duration(10, TimeUnit.SECONDS))
+                        .setSocksProxy(getSystemSocksProxy()),
+                jettyIoPool,
+                ImmutableSet.of(new UserAgentRequestFilter(userAgent))));
     }
 
     static QueryExecutor create(HttpClient httpClient)
