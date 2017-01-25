@@ -982,7 +982,6 @@ public class ExpressionAnalyzer
             process(value, context);
 
             Expression valueList = node.getValueList();
-            process(valueList, context);
 
             if (valueList instanceof InListExpression) {
                 InListExpression inListExpression = (InListExpression) valueList;
@@ -992,6 +991,7 @@ public class ExpressionAnalyzer
                         ImmutableList.<Expression>builder().add(value).addAll(inListExpression.getValues()).build());
             }
             else if (valueList instanceof SubqueryExpression) {
+                process(valueList, context);
                 coerceToSingleType(context, node, "value and result of subquery must be of the same type for IN expression: %s vs %s", value, valueList);
             }
 
@@ -999,14 +999,14 @@ public class ExpressionAnalyzer
             return BOOLEAN;
         }
 
-        @Override
-        protected Type visitInListExpression(InListExpression node, StackableAstVisitorContext<Context> context)
-        {
-            Type type = coerceToSingleType(context, "All IN list values must be the same type: %s", node.getValues());
-
-            expressionTypes.put(node, type);
-            return type; // TODO: this really should a be relation type
-        }
+//        @Override
+//        protected Type visitInListExpression(InListExpression node, StackableAstVisitorContext<Context> context)
+//        {
+//            Type type = coerceToSingleType(context, "All IN list values must be the same type: %s", node.getValues());
+//
+//            expressionTypes.put(node, type);
+//            return type; // TODO: this really should a be relation type
+//        }
 
         @Override
         protected Type visitSubqueryExpression(SubqueryExpression node, StackableAstVisitorContext<Context> context)
@@ -1157,10 +1157,7 @@ public class ExpressionAnalyzer
                 if (!typeManager.canCoerce(actualType, expectedType)) {
                     throw new SemanticException(TYPE_MISMATCH, expression, message + " must evaluate to a %s (actual: %s)", expectedType, actualType);
                 }
-                expressionCoercions.put(expression, expectedType);
-                if (typeManager.isTypeOnlyCoercion(actualType, expectedType)) {
-                    typeOnlyCoercions.add(expression);
-                }
+                setCoercionForExpression(expectedType, expression, actualType);
             }
         }
 
@@ -1188,16 +1185,10 @@ public class ExpressionAnalyzer
                     && typeManager.canCoerce(secondType, superTypeOptional.get())) {
                 Type superType = superTypeOptional.get();
                 if (!firstType.equals(superType)) {
-                    expressionCoercions.put(first, superType);
-                    if (typeManager.isTypeOnlyCoercion(firstType, superType)) {
-                        typeOnlyCoercions.add(first);
-                    }
+                    setCoercionForExpression(superType, first, firstType);
                 }
                 if (!secondType.equals(superType)) {
-                    expressionCoercions.put(second, superType);
-                    if (typeManager.isTypeOnlyCoercion(secondType, superType)) {
-                        typeOnlyCoercions.add(second);
-                    }
+                    setCoercionForExpression(superType, second, secondType);
                 }
                 return superType;
             }
@@ -1224,14 +1215,23 @@ public class ExpressionAnalyzer
                     if (!typeManager.canCoerce(type, superType)) {
                         throw new SemanticException(TYPE_MISMATCH, expression, message, superType);
                     }
-                    expressionCoercions.put(expression, superType);
-                    if (typeManager.isTypeOnlyCoercion(type, superType)) {
-                        typeOnlyCoercions.add(expression);
-                    }
+                    setCoercionForExpression(superType, expression, type);
                 }
             }
 
             return superType;
+        }
+
+        private void setCoercionForExpression(Type superType, Expression expression, Type type)
+        {
+            checkState(!expressionCoercions.containsKey(expression));
+            expressionCoercions.put(expression, superType);
+            if (typeManager.isTypeOnlyCoercion(type, superType)) {
+                typeOnlyCoercions.add(expression);
+            }
+            else if (typeOnlyCoercions.contains(expression)) {
+                typeOnlyCoercions.remove(expression);
+            }
         }
     }
 
