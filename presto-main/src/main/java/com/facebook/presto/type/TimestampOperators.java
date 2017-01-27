@@ -106,20 +106,31 @@ public final class TimestampOperators
     @SqlType(StandardTypes.DATE)
     public static long castToDate(ConnectorSession session, @SqlType(StandardTypes.TIMESTAMP) long value)
     {
-        // round down the current timestamp to days
-        ISOChronology chronology = getChronology(session.getTimeZoneKey());
-        long date = chronology.dayOfYear().roundFloor(value);
-        // date is currently midnight in timezone of the session
-        // convert to UTC
-        long millis = date + chronology.getZone().getOffset(date);
-        return TimeUnit.MILLISECONDS.toDays(millis);
+        ISOChronology chronology;
+        if (session.isLegacyTimestamp()) {
+            // round down the current timestamp to days
+            chronology = getChronology(session.getTimeZoneKey());
+            long date = chronology.dayOfYear().roundFloor(value);
+            // date is currently midnight in timezone of the session
+            // convert to UTC
+            long millis = date + chronology.getZone().getOffset(date);
+            return TimeUnit.MILLISECONDS.toDays(millis);
+        }
+        else {
+            return value / (1000 * 60 * 60 * 24); // FIXME
+        }
     }
 
     @ScalarOperator(CAST)
     @SqlType(StandardTypes.TIME)
     public static long castToTime(ConnectorSession session, @SqlType(StandardTypes.TIMESTAMP) long value)
     {
-        return modulo24Hour(getChronology(session.getTimeZoneKey()), value);
+        if (session.isLegacyTimestamp()) {
+            return modulo24Hour(getChronology(session.getTimeZoneKey()), value);
+        }
+        else {
+            return value % (1000 * 60 * 60 * 24); // FIXME
+        }
     }
 
     @ScalarOperator(CAST)
@@ -142,7 +153,12 @@ public final class TimestampOperators
     @SqlType("varchar(x)")
     public static Slice castToSlice(ConnectorSession session, @SqlType(StandardTypes.TIMESTAMP) long value)
     {
-        return utf8Slice(printTimestampWithoutTimeZone(session.getTimeZoneKey(), value));
+        if (session.isLegacyTimestamp()) {
+            return utf8Slice(printTimestampWithoutTimeZone(session.getTimeZoneKey(), value));
+        }
+        else {
+            return utf8Slice(printTimestampWithoutTimeZone(value));
+        }
     }
 
     @ScalarOperator(CAST)
@@ -151,7 +167,12 @@ public final class TimestampOperators
     public static long castFromSlice(ConnectorSession session, @SqlType("varchar(x)") Slice value)
     {
         try {
-            return parseTimestampWithoutTimeZone(session.getTimeZoneKey(), trim(value).toStringUtf8());
+            if (session.isLegacyTimestamp()) {
+                return parseTimestampWithoutTimeZone(session.getTimeZoneKey(), trim(value).toStringUtf8());
+            }
+            else {
+                return parseTimestampWithoutTimeZone(trim(value).toStringUtf8());
+            }
         }
         catch (IllegalArgumentException e) {
             throw new PrestoException(INVALID_CAST_ARGUMENT, "Value cannot be cast to timestamp: " + value.toStringUtf8(), e);
