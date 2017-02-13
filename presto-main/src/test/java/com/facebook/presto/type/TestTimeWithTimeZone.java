@@ -26,15 +26,18 @@ import org.joda.time.DateTimeZone;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
+import static com.facebook.presto.SystemSessionProperties.isLegacyTimestamp;
 import static com.facebook.presto.spi.type.BooleanType.BOOLEAN;
 import static com.facebook.presto.spi.type.TimeType.TIME;
 import static com.facebook.presto.spi.type.TimeWithTimeZoneType.TIME_WITH_TIME_ZONE;
+import static com.facebook.presto.spi.type.TimeZoneKey.UTC_KEY;
 import static com.facebook.presto.spi.type.TimeZoneKey.getTimeZoneKey;
 import static com.facebook.presto.spi.type.TimeZoneKey.getTimeZoneKeyForOffset;
 import static com.facebook.presto.spi.type.TimestampType.TIMESTAMP;
 import static com.facebook.presto.spi.type.TimestampWithTimeZoneType.TIMESTAMP_WITH_TIME_ZONE;
 import static com.facebook.presto.spi.type.VarcharType.VARCHAR;
 import static com.facebook.presto.testing.TestingSession.testSessionBuilder;
+import static com.facebook.presto.util.DateTimeZoneIndex.getDateTimeZone;
 
 public class TestTimeWithTimeZone
 {
@@ -203,18 +206,14 @@ public class TestTimeWithTimeZone
     public void testCastToTime()
             throws Exception
     {
-        assertFunction("cast(TIME '03:04:05.321 +07:09' as time)",
-                TIME,
-                new SqlTime(new DateTime(1970, 1, 1, 3, 4, 5, 321, WEIRD_ZONE).getMillis(), session.getTimeZoneKey()));
+        assertFunction("cast(TIME '03:04:05.321 +07:09' as time)", TIME, createSqlTime(1970, 1, 1, 3, 4, 5, 321));
     }
 
     @Test
     public void testCastToTimestamp()
             throws Exception
     {
-        assertFunction("cast(TIME '03:04:05.321 +07:09' as timestamp)",
-                TIMESTAMP,
-                new SqlTimestamp(new DateTime(1970, 1, 1, 3, 4, 5, 321, WEIRD_ZONE).getMillis(), session.getTimeZoneKey()));
+        assertFunction("cast(TIME '03:04:05.321 +07:09' as timestamp)", TIMESTAMP, createSqlTimestamp(1970, 1, 1, 3, 4, 5, 321));
     }
 
     @Test
@@ -232,5 +231,37 @@ public class TestTimeWithTimeZone
         assertFunction("cast(TIME '03:04:05.321 +07:09' as varchar)", VARCHAR, "03:04:05.321 +07:09");
         assertFunction("cast(TIME '03:04:05 +07:09' as varchar)", VARCHAR, "03:04:05.000 +07:09");
         assertFunction("cast(TIME '03:04 +07:09' as varchar)", VARCHAR, "03:04:00.000 +07:09");
+    }
+
+    private SqlTime createSqlTime(int year,
+            int monthOfYear,
+            int dayOfMonth,
+            int hourOfDay,
+            int minuteOfHour,
+            int secondOfMinute,
+            int millisOfSecond)
+    {
+        if (isLegacyTimestamp(session)) {
+            return new SqlTime(new DateTime(year, monthOfYear, dayOfMonth, hourOfDay, minuteOfHour, secondOfMinute, millisOfSecond, WEIRD_ZONE).getMillis(), session.getTimeZoneKey());
+        }
+        else {
+            return new SqlTime(new DateTime(year, monthOfYear, dayOfMonth, hourOfDay, minuteOfHour, secondOfMinute, millisOfSecond, getDateTimeZone(UTC_KEY)).getMillis());
+        }
+    }
+
+    private SqlTimestamp createSqlTimestamp(int year,
+            int monthOfYear,
+            int dayOfMonth,
+            int hourOfDay,
+            int minuteOfHour,
+            int secondOfMinute,
+            int millisOfSecond)
+    {
+        if (isLegacyTimestamp(session)) {
+            return new SqlTimestamp(new DateTime(year, monthOfYear, dayOfMonth, hourOfDay, minuteOfHour, secondOfMinute, millisOfSecond, WEIRD_ZONE).getMillis(), session.getTimeZoneKey());
+        }
+        else {
+            return new SqlTimestamp(new DateTime(year, monthOfYear, dayOfMonth, hourOfDay, minuteOfHour, secondOfMinute, millisOfSecond, getDateTimeZone(UTC_KEY)).getMillis());
+        }
     }
 }
