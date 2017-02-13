@@ -29,10 +29,12 @@ import org.testng.annotations.Test;
 
 import java.util.concurrent.TimeUnit;
 
+import static com.facebook.presto.SystemSessionProperties.isLegacyTimestamp;
 import static com.facebook.presto.spi.type.BooleanType.BOOLEAN;
 import static com.facebook.presto.spi.type.DateType.DATE;
 import static com.facebook.presto.spi.type.TimeType.TIME;
 import static com.facebook.presto.spi.type.TimeWithTimeZoneType.TIME_WITH_TIME_ZONE;
+import static com.facebook.presto.spi.type.TimeZoneKey.UTC_KEY;
 import static com.facebook.presto.spi.type.TimeZoneKey.getTimeZoneKey;
 import static com.facebook.presto.spi.type.TimeZoneKey.getTimeZoneKeyForOffset;
 import static com.facebook.presto.spi.type.TimestampType.TIMESTAMP;
@@ -255,9 +257,7 @@ public class TestTimestampWithTimeZone
     public void testCastToTime()
             throws Exception
     {
-        assertFunction("cast(TIMESTAMP '2001-1-22 03:04:05.321 +07:09' as time)",
-                TIME,
-                new SqlTime(new DateTime(1970, 1, 1, 3, 4, 5, 321, WEIRD_ZONE).getMillis(), session.getTimeZoneKey()));
+        assertFunction("cast(TIMESTAMP '2001-1-22 03:04:05.321 +07:09' as time)", TIME, createSqlTime(1970, 1, 1, 3, 4, 5, 321));
     }
 
     @Test
@@ -272,9 +272,7 @@ public class TestTimestampWithTimeZone
     @Test
     public void testCastToTimestamp()
     {
-        assertFunction("cast(TIMESTAMP '2001-1-22 03:04:05.321 +07:09' as timestamp)",
-                TIMESTAMP,
-                new SqlTimestamp(new DateTime(2001, 1, 22, 3, 4, 5, 321, WEIRD_ZONE).getMillis(), session.getTimeZoneKey()));
+        assertFunction("cast(TIMESTAMP '2001-1-22 03:04:05.321 +07:09' as timestamp)",  TIMESTAMP, createSqlTimestamp(2001, 1, 22, 3, 4, 5, 321));
     }
 
     @Test
@@ -365,5 +363,37 @@ public class TestTimestampWithTimeZone
                 "least(TIMESTAMP '2001-01-02 03:04:05.321 +07:09', TIMESTAMP '2001-01-02 01:04:05.321 +02:09')",
                 TIMESTAMP_WITH_TIME_ZONE,
                 new SqlTimestampWithTimeZone(new DateTime(2001, 1, 2, 3, 4, 5, 321, WEIRD_ZONE).getMillis(), WEIRD_TIME_ZONE_KEY));
+    }
+
+    private SqlTime createSqlTime(int year,
+            int monthOfYear,
+            int dayOfMonth,
+            int hourOfDay,
+            int minuteOfHour,
+            int secondOfMinute,
+            int millisOfSecond)
+    {
+        if (isLegacyTimestamp(session)) {
+            return new SqlTime(new DateTime(year, monthOfYear, dayOfMonth, hourOfDay, minuteOfHour, secondOfMinute, millisOfSecond, WEIRD_ZONE).getMillis(), session.getTimeZoneKey());
+        }
+        else {
+            return new SqlTime(new DateTime(year, monthOfYear, dayOfMonth, hourOfDay, minuteOfHour, secondOfMinute, millisOfSecond, getDateTimeZone(UTC_KEY)).getMillis());
+        }
+    }
+
+    private SqlTimestamp createSqlTimestamp(int year,
+            int monthOfYear,
+            int dayOfMonth,
+            int hourOfDay,
+            int minuteOfHour,
+            int secondOfMinute,
+            int millisOfSecond)
+    {
+        if (isLegacyTimestamp(session)) {
+            return new SqlTimestamp(new DateTime(year, monthOfYear, dayOfMonth, hourOfDay, minuteOfHour, secondOfMinute, millisOfSecond, WEIRD_ZONE).getMillis(), session.getTimeZoneKey());
+        }
+        else {
+            return new SqlTimestamp(new DateTime(year, monthOfYear, dayOfMonth, hourOfDay, minuteOfHour, secondOfMinute, millisOfSecond, getDateTimeZone(UTC_KEY)).getMillis());
+        }
     }
 }
