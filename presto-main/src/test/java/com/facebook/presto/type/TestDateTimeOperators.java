@@ -33,11 +33,13 @@ import static com.facebook.presto.spi.type.BooleanType.BOOLEAN;
 import static com.facebook.presto.spi.type.DateType.DATE;
 import static com.facebook.presto.spi.type.TimeType.TIME;
 import static com.facebook.presto.spi.type.TimeWithTimeZoneType.TIME_WITH_TIME_ZONE;
+import static com.facebook.presto.spi.type.TimeZoneKey.UTC_KEY;
 import static com.facebook.presto.spi.type.TimeZoneKey.getTimeZoneKey;
 import static com.facebook.presto.spi.type.TimeZoneKey.getTimeZoneKeyForOffset;
 import static com.facebook.presto.spi.type.TimestampType.TIMESTAMP;
 import static com.facebook.presto.spi.type.TimestampWithTimeZoneType.TIMESTAMP_WITH_TIME_ZONE;
 import static com.facebook.presto.spi.type.VarcharType.VARCHAR;
+import static com.facebook.presto.testing.TestingConnectorSession.SESSION;
 import static com.facebook.presto.testing.TestingSession.testSessionBuilder;
 import static com.facebook.presto.util.DateTimeZoneIndex.getDateTimeZone;
 import static java.util.concurrent.TimeUnit.HOURS;
@@ -95,17 +97,17 @@ public class TestDateTimeOperators
     @Test
     public void testTimePlusInterval()
     {
-        assertFunction("TIME '03:04:05.321' + INTERVAL '3' hour", TIME, new SqlTime(new DateTime(1970, 1, 1, 6, 4, 5, 321, TIME_ZONE).getMillis(), TIME_ZONE_KEY));
-        assertFunction("INTERVAL '3' hour + TIME '03:04:05.321'", TIME, new SqlTime(new DateTime(1970, 1, 1, 6, 4, 5, 321, TIME_ZONE).getMillis(), TIME_ZONE_KEY));
-        assertFunction("TIME '03:04:05.321' + INTERVAL '3' day", TIME, new SqlTime(new DateTime(1970, 1, 1, 3, 4, 5, 321, TIME_ZONE).getMillis(), TIME_ZONE_KEY));
-        assertFunction("INTERVAL '3' day + TIME '03:04:05.321'", TIME, new SqlTime(new DateTime(1970, 1, 1, 3, 4, 5, 321, TIME_ZONE).getMillis(), TIME_ZONE_KEY));
-        assertFunction("TIME '03:04:05.321' + INTERVAL '3' month", TIME, new SqlTime(new DateTime(1970, 1, 1, 3, 4, 5, 321, TIME_ZONE).getMillis(), TIME_ZONE_KEY));
-        assertFunction("INTERVAL '3' month + TIME '03:04:05.321'", TIME, new SqlTime(new DateTime(1970, 1, 1, 3, 4, 5, 321, TIME_ZONE).getMillis(), TIME_ZONE_KEY));
-        assertFunction("TIME '03:04:05.321' + INTERVAL '3' year", TIME, new SqlTime(new DateTime(1970, 1, 1, 3, 4, 5, 321, TIME_ZONE).getMillis(), TIME_ZONE_KEY));
-        assertFunction("INTERVAL '3' year + TIME '03:04:05.321'", TIME, new SqlTime(new DateTime(1970, 1, 1, 3, 4, 5, 321, TIME_ZONE).getMillis(), TIME_ZONE_KEY));
+        assertFunction("TIME '03:04:05.321' + INTERVAL '3' hour", TIME, createSqlTime(1970, 1, 1, 6, 4, 5, 321));
+        assertFunction("INTERVAL '3' hour + TIME '03:04:05.321'", TIME, createSqlTime(1970, 1, 1, 6, 4, 5, 321));
+        assertFunction("TIME '03:04:05.321' + INTERVAL '3' day", TIME, createSqlTime(1970, 1, 1, 3, 4, 5, 321));
+        assertFunction("INTERVAL '3' day + TIME '03:04:05.321'", TIME, createSqlTime(1970, 1, 1, 3, 4, 5, 321));
+        assertFunction("TIME '03:04:05.321' + INTERVAL '3' month", TIME, createSqlTime(1970, 1, 1, 3, 4, 5, 321));
+        assertFunction("INTERVAL '3' month + TIME '03:04:05.321'", TIME, createSqlTime(1970, 1, 1, 3, 4, 5, 321));
+        assertFunction("TIME '03:04:05.321' + INTERVAL '3' year", TIME, createSqlTime(1970, 1, 1, 3, 4, 5, 321));
+        assertFunction("INTERVAL '3' year + TIME '03:04:05.321'", TIME, createSqlTime(1970, 1, 1, 3, 4, 5, 321));
 
-        assertFunction("TIME '03:04:05.321' + INTERVAL '27' hour", TIME, new SqlTime(new DateTime(1970, 1, 1, 6, 4, 5, 321, TIME_ZONE).getMillis(), TIME_ZONE_KEY));
-        assertFunction("INTERVAL '27' hour + TIME '03:04:05.321'", TIME, new SqlTime(new DateTime(1970, 1, 1, 6, 4, 5, 321, TIME_ZONE).getMillis(), TIME_ZONE_KEY));
+        assertFunction("TIME '03:04:05.321' + INTERVAL '27' hour", TIME, createSqlTime(1970, 1, 1, 6, 4, 5, 321));
+        assertFunction("INTERVAL '27' hour + TIME '03:04:05.321'", TIME, createSqlTime(1970, 1, 1, 6, 4, 5, 321));
 
         assertFunction("TIME '03:04:05.321 +05:09' + INTERVAL '3' hour",
                 TIME_WITH_TIME_ZONE,
@@ -210,12 +212,12 @@ public class TestDateTimeOperators
     @Test
     public void testTimeMinusInterval()
     {
-        assertFunction("TIME '03:04:05.321' - INTERVAL '3' hour", TIME, new SqlTime(new DateTime(1970, 1, 1, 0, 4, 5, 321, TIME_ZONE).getMillis(), TIME_ZONE_KEY));
-        assertFunction("TIME '03:04:05.321' - INTERVAL '3' day", TIME, new SqlTime(new DateTime(1970, 1, 1, 3, 4, 5, 321, TIME_ZONE).getMillis(), TIME_ZONE_KEY));
-        assertFunction("TIME '03:04:05.321' - INTERVAL '3' month", TIME, new SqlTime(new DateTime(1970, 1, 1, 3, 4, 5, 321, TIME_ZONE).getMillis(), TIME_ZONE_KEY));
-        assertFunction("TIME '03:04:05.321' - INTERVAL '3' year", TIME, new SqlTime(new DateTime(1970, 1, 1, 3, 4, 5, 321, TIME_ZONE).getMillis(), TIME_ZONE_KEY));
+        assertFunction("TIME '03:04:05.321' - INTERVAL '3' hour", TIME, createSqlTime(1970, 1, 1, 0, 4, 5, 321));
+        assertFunction("TIME '03:04:05.321' - INTERVAL '3' day", TIME, createSqlTime(1970, 1, 1, 3, 4, 5, 321));
+        assertFunction("TIME '03:04:05.321' - INTERVAL '3' month", TIME, createSqlTime(1970, 1, 1, 3, 4, 5, 321));
+        assertFunction("TIME '03:04:05.321' - INTERVAL '3' year", TIME, createSqlTime(1970, 1, 1, 3, 4, 5, 321));
 
-        assertFunction("TIME '03:04:05.321' - INTERVAL '6' hour", TIME, new SqlTime(new DateTime(1970, 1, 1, 21, 4, 5, 321, TIME_ZONE).getMillis(), TIME_ZONE_KEY));
+        assertFunction("TIME '03:04:05.321' - INTERVAL '6' hour", TIME, createSqlTime(1970, 1, 1, 21, 4, 5, 321));
 
         assertFunction("TIME '03:04:05.321 +05:09' - INTERVAL '3' hour",
                 TIME_WITH_TIME_ZONE,
@@ -330,5 +332,21 @@ public class TestDateTimeOperators
     private static SqlDate toDate(DateTime dateTime)
     {
         return new SqlDate((int) TimeUnit.MILLISECONDS.toDays(dateTime.getMillis()));
+    }
+
+    private static SqlTime createSqlTime(int year,
+            int monthOfYear,
+            int dayOfMonth,
+            int hourOfDay,
+            int minuteOfHour,
+            int secondOfMinute,
+            int millisOfSecond)
+    {
+        if (SESSION.isLegacyTimestamp()) {
+            return new SqlTime(new DateTime(year, monthOfYear, dayOfMonth, hourOfDay, minuteOfHour, secondOfMinute, millisOfSecond, TIME_ZONE).getMillis(), TIME_ZONE_KEY);
+        }
+        else {
+            return new SqlTime(new DateTime(year, monthOfYear, dayOfMonth, hourOfDay, minuteOfHour, secondOfMinute, millisOfSecond, getDateTimeZone(UTC_KEY)).getMillis());
+        }
     }
 }
