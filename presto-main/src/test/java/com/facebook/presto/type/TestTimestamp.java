@@ -15,10 +15,9 @@ package com.facebook.presto.type;
 
 import com.facebook.presto.Session;
 import com.facebook.presto.operator.scalar.FunctionAssertions;
+import com.facebook.presto.spi.ConnectorSession;
 import com.facebook.presto.spi.type.SqlDate;
-import com.facebook.presto.spi.type.SqlTime;
 import com.facebook.presto.spi.type.SqlTimeWithTimeZone;
-import com.facebook.presto.spi.type.SqlTimestamp;
 import com.facebook.presto.spi.type.SqlTimestampWithTimeZone;
 import com.facebook.presto.spi.type.TimeZoneKey;
 import com.facebook.presto.spi.type.Type;
@@ -29,6 +28,8 @@ import org.testng.annotations.Test;
 
 import java.util.concurrent.TimeUnit;
 
+import static com.facebook.presto.SystemSessionProperties.isLegacyTimestamp;
+import static com.facebook.presto.spi.StandardErrorCode.INVALID_CAST_ARGUMENT;
 import static com.facebook.presto.spi.type.BooleanType.BOOLEAN;
 import static com.facebook.presto.spi.type.DateType.DATE;
 import static com.facebook.presto.spi.type.TimeType.TIME;
@@ -39,6 +40,8 @@ import static com.facebook.presto.spi.type.TimestampType.TIMESTAMP;
 import static com.facebook.presto.spi.type.TimestampWithTimeZoneType.TIMESTAMP_WITH_TIME_ZONE;
 import static com.facebook.presto.spi.type.VarcharType.VARCHAR;
 import static com.facebook.presto.testing.TestingSession.testSessionBuilder;
+import static com.facebook.presto.util.DateTimeUtils.sqlTimeOf;
+import static com.facebook.presto.util.DateTimeUtils.sqlTimestampOf;
 import static com.facebook.presto.util.DateTimeZoneIndex.getDateTimeZone;
 import static org.joda.time.DateTimeZone.UTC;
 
@@ -52,6 +55,7 @@ public class TestTimestamp
     private static final DateTimeZone ORAL_ZONE = getDateTimeZone(ORAL_TIME_ZONE_KEY);
 
     private FunctionAssertions functionAssertions;
+    private boolean isLegacyTimestamp;
 
     @BeforeClass
     public void setUp()
@@ -59,6 +63,7 @@ public class TestTimestamp
         Session session = testSessionBuilder()
                 .setTimeZoneKey(TIME_ZONE_KEY)
                 .build();
+        isLegacyTimestamp = isLegacyTimestamp(session);
         functionAssertions = new FunctionAssertions(session);
     }
 
@@ -67,22 +72,27 @@ public class TestTimestamp
         functionAssertions.assertFunction(projection, expectedType, expected);
     }
 
+    private ConnectorSession connectorSession()
+    {
+        return functionAssertions.getSession().toConnectorSession();
+    }
+
     @Test
     public void testLiteral()
     {
-        assertFunction("TIMESTAMP '2013-03-30 01:05'", TIMESTAMP, new SqlTimestamp(new DateTime(2013, 3, 30, 1, 5, 0, 0, DATE_TIME_ZONE).getMillis(), TIME_ZONE_KEY));
-        assertFunction("TIMESTAMP '2013-03-30 02:05'", TIMESTAMP, new SqlTimestamp(new DateTime(2013, 3, 30, 2, 5, 0, 0, DATE_TIME_ZONE).getMillis(), TIME_ZONE_KEY));
-        assertFunction("TIMESTAMP '2013-03-30 03:05'", TIMESTAMP, new SqlTimestamp(new DateTime(2013, 3, 30, 3, 5, 0, 0, DATE_TIME_ZONE).getMillis(), TIME_ZONE_KEY));
+        assertFunction("TIMESTAMP '2013-03-30 01:05'", TIMESTAMP, sqlTimestampOf(2013, 3, 30, 1, 5, 0, 0, DATE_TIME_ZONE, TIME_ZONE_KEY, connectorSession()));
+        assertFunction("TIMESTAMP '2013-03-30 02:05'", TIMESTAMP, sqlTimestampOf(2013, 3, 30, 2, 5, 0, 0, DATE_TIME_ZONE, TIME_ZONE_KEY, connectorSession()));
+        assertFunction("TIMESTAMP '2013-03-30 03:05'", TIMESTAMP, sqlTimestampOf(2013, 3, 30, 3, 5, 0, 0, DATE_TIME_ZONE, TIME_ZONE_KEY, connectorSession()));
 
-        assertFunction("TIMESTAMP '2001-01-22 03:04:05.321'", TIMESTAMP, new SqlTimestamp(new DateTime(2001, 1, 22, 3, 4, 5, 321, DATE_TIME_ZONE).getMillis(), TIME_ZONE_KEY));
-        assertFunction("TIMESTAMP '2001-01-22 03:04:05'", TIMESTAMP, new SqlTimestamp(new DateTime(2001, 1, 22, 3, 4, 5, 0, DATE_TIME_ZONE).getMillis(), TIME_ZONE_KEY));
-        assertFunction("TIMESTAMP '2001-01-22 03:04'", TIMESTAMP, new SqlTimestamp(new DateTime(2001, 1, 22, 3, 4, 0, 0, DATE_TIME_ZONE).getMillis(), TIME_ZONE_KEY));
-        assertFunction("TIMESTAMP '2001-01-22'", TIMESTAMP, new SqlTimestamp(new DateTime(2001, 1, 22, 0, 0, 0, 0, DATE_TIME_ZONE).getMillis(), TIME_ZONE_KEY));
+        assertFunction("TIMESTAMP '2001-01-22 03:04:05.321'", TIMESTAMP, sqlTimestampOf(2001, 1, 22, 3, 4, 5, 321, DATE_TIME_ZONE, TIME_ZONE_KEY, connectorSession()));
+        assertFunction("TIMESTAMP '2001-01-22 03:04:05'", TIMESTAMP, sqlTimestampOf(2001, 1, 22, 3, 4, 5, 0, DATE_TIME_ZONE, TIME_ZONE_KEY, connectorSession()));
+        assertFunction("TIMESTAMP '2001-01-22 03:04'", TIMESTAMP, sqlTimestampOf(2001, 1, 22, 3, 4, 0, 0, DATE_TIME_ZONE, TIME_ZONE_KEY, connectorSession()));
+        assertFunction("TIMESTAMP '2001-01-22'", TIMESTAMP, sqlTimestampOf(2001, 1, 22, 0, 0, 0, 0, DATE_TIME_ZONE, TIME_ZONE_KEY, connectorSession()));
 
-        assertFunction("TIMESTAMP '2001-1-2 3:4:5.321'", TIMESTAMP, new SqlTimestamp(new DateTime(2001, 1, 2, 3, 4, 5, 321, DATE_TIME_ZONE).getMillis(), TIME_ZONE_KEY));
-        assertFunction("TIMESTAMP '2001-1-2 3:4:5'", TIMESTAMP, new SqlTimestamp(new DateTime(2001, 1, 2, 3, 4, 5, 0, DATE_TIME_ZONE).getMillis(), TIME_ZONE_KEY));
-        assertFunction("TIMESTAMP '2001-1-2 3:4'", TIMESTAMP, new SqlTimestamp(new DateTime(2001, 1, 2, 3, 4, 0, 0, DATE_TIME_ZONE).getMillis(), TIME_ZONE_KEY));
-        assertFunction("TIMESTAMP '2001-1-2'", TIMESTAMP, new SqlTimestamp(new DateTime(2001, 1, 2, 0, 0, 0, 0, DATE_TIME_ZONE).getMillis(), TIME_ZONE_KEY));
+        assertFunction("TIMESTAMP '2001-1-2 3:4:5.321'", TIMESTAMP, sqlTimestampOf(2001, 1, 2, 3, 4, 5, 321, DATE_TIME_ZONE, TIME_ZONE_KEY, connectorSession()));
+        assertFunction("TIMESTAMP '2001-1-2 3:4:5'", TIMESTAMP, sqlTimestampOf(2001, 1, 2, 3, 4, 5, 0, DATE_TIME_ZONE, TIME_ZONE_KEY, connectorSession()));
+        assertFunction("TIMESTAMP '2001-1-2 3:4'", TIMESTAMP, sqlTimestampOf(2001, 1, 2, 3, 4, 0, 0, DATE_TIME_ZONE, TIME_ZONE_KEY, connectorSession()));
+        assertFunction("TIMESTAMP '2001-1-2'", TIMESTAMP, sqlTimestampOf(2001, 1, 2, 0, 0, 0, 0, DATE_TIME_ZONE, TIME_ZONE_KEY, connectorSession()));
     }
 
     @Test
@@ -178,7 +188,7 @@ public class TestTimestamp
     public void testCastToTime()
             throws Exception
     {
-        assertFunction("cast(TIMESTAMP '2001-1-22 03:04:05.321' as time)", TIME, new SqlTime(new DateTime(1970, 1, 1, 3, 4, 5, 321, DATE_TIME_ZONE).getMillis(), TIME_ZONE_KEY));
+        assertFunction("cast(TIMESTAMP '2001-1-22 03:04:05.321' as time)", TIME, sqlTimeOf(1970, 1, 1, 3, 4, 5, 321, DATE_TIME_ZONE, TIME_ZONE_KEY, connectorSession()));
     }
 
     @Test
@@ -210,54 +220,66 @@ public class TestTimestamp
     @Test
     public void testCastFromSlice()
     {
-        assertFunction("cast('2001-1-22 03:04:05.321' as timestamp)",
-                TIMESTAMP,
-                new SqlTimestamp(new DateTime(2001, 1, 22, 3, 4, 5, 321, DATE_TIME_ZONE).getMillis(), TIME_ZONE_KEY));
-        assertFunction("cast('2001-1-22 03:04:05' as timestamp)",
-                TIMESTAMP,
-                new SqlTimestamp(new DateTime(2001, 1, 22, 3, 4, 5, 0, DATE_TIME_ZONE).getMillis(), TIME_ZONE_KEY));
-        assertFunction("cast('2001-1-22 03:04' as timestamp)",
-                TIMESTAMP,
-                new SqlTimestamp(new DateTime(2001, 1, 22, 3, 4, 0, 0, DATE_TIME_ZONE).getMillis(), TIME_ZONE_KEY));
-        assertFunction("cast('2001-1-22' as timestamp)",
-                TIMESTAMP,
-                new SqlTimestamp(new DateTime(2001, 1, 22, 0, 0, 0, 0, DATE_TIME_ZONE).getMillis(), TIME_ZONE_KEY));
+        assertFunction("cast('2001-1-22 03:04:05.321' as timestamp)", TIMESTAMP, sqlTimestampOf(2001, 1, 22, 3, 4, 5, 321, DATE_TIME_ZONE, TIME_ZONE_KEY, connectorSession()));
+        assertFunction("cast('2001-1-22 03:04:05' as timestamp)", TIMESTAMP, sqlTimestampOf(2001, 1, 22, 3, 4, 5, 0, DATE_TIME_ZONE, TIME_ZONE_KEY, connectorSession()));
+        assertFunction("cast('2001-1-22 03:04' as timestamp)", TIMESTAMP, sqlTimestampOf(2001, 1, 22, 3, 4, 0, 0, DATE_TIME_ZONE, TIME_ZONE_KEY, connectorSession()));
+        assertFunction("cast('2001-1-22' as timestamp)", TIMESTAMP, sqlTimestampOf(2001, 1, 22, 0, 0, 0, 0, DATE_TIME_ZONE, TIME_ZONE_KEY, connectorSession()));
 
-        assertFunction("cast('2001-1-22 03:04:05.321 +07:09' as timestamp)",
-                TIMESTAMP,
-                new SqlTimestamp(new DateTime(2001, 1, 22, 3, 4, 5, 321, WEIRD_ZONE).getMillis(), TIME_ZONE_KEY));
-        assertFunction("cast('2001-1-22 03:04:05 +07:09' as timestamp)",
-                TIMESTAMP,
-                new SqlTimestamp(new DateTime(2001, 1, 22, 3, 4, 5, 0, WEIRD_ZONE).getMillis(), TIME_ZONE_KEY));
-        assertFunction("cast('2001-1-22 03:04 +07:09' as timestamp)",
-                TIMESTAMP,
-                new SqlTimestamp(new DateTime(2001, 1, 22, 3, 4, 0, 0, WEIRD_ZONE).getMillis(), TIME_ZONE_KEY));
-        assertFunction("cast('2001-1-22 +07:09' as timestamp)",
-                TIMESTAMP,
-                new SqlTimestamp(new DateTime(2001, 1, 22, 0, 0, 0, 0, WEIRD_ZONE).getMillis(), TIME_ZONE_KEY));
+        assertFunction("cast('\n\t 2001-1-22 03:04:05.321' as timestamp)", TIMESTAMP, sqlTimestampOf(2001, 1, 22, 3, 4, 5, 321, DATE_TIME_ZONE, TIME_ZONE_KEY, connectorSession()));
+        assertFunction("cast('2001-1-22 03:04:05.321 \t\n' as timestamp)", TIMESTAMP, sqlTimestampOf(2001, 1, 22, 3, 4, 5, 321, DATE_TIME_ZONE, TIME_ZONE_KEY, connectorSession()));
+        assertFunction("cast('\n\t 2001-1-22 03:04:05.321 \t\n' as timestamp)", TIMESTAMP, sqlTimestampOf(2001, 1, 22, 3, 4, 5, 321, DATE_TIME_ZONE, TIME_ZONE_KEY, connectorSession()));
+    }
 
-        assertFunction("cast('2001-1-22 03:04:05.321 Asia/Oral' as timestamp)",
-                TIMESTAMP,
-                new SqlTimestamp(new DateTime(2001, 1, 22, 3, 4, 5, 321, ORAL_ZONE).getMillis(), TIME_ZONE_KEY));
-        assertFunction("cast('2001-1-22 03:04:05 Asia/Oral' as timestamp)",
-                TIMESTAMP,
-                new SqlTimestamp(new DateTime(2001, 1, 22, 3, 4, 5, 0, ORAL_ZONE).getMillis(), TIME_ZONE_KEY));
-        assertFunction("cast('2001-1-22 03:04 Asia/Oral' as timestamp)",
-                TIMESTAMP,
-                new SqlTimestamp(new DateTime(2001, 1, 22, 3, 4, 0, 0, ORAL_ZONE).getMillis(), TIME_ZONE_KEY));
-        assertFunction("cast('2001-1-22 Asia/Oral' as timestamp)",
-                TIMESTAMP,
-                new SqlTimestamp(new DateTime(2001, 1, 22, 0, 0, 0, 0, ORAL_ZONE).getMillis(), TIME_ZONE_KEY));
+    @Test
+    public void testCastFromSliceFailsOnTimestampWithTimeZone()
+    {
+        if (isLegacyTimestamp) {
+            // This cast is allowed in legacy mode
+            assertFunction("cast('2001-1-22 03:04:05.321 +07:09' as timestamp)", TIMESTAMP, sqlTimestampOf(2001, 1, 22, 3, 4, 5, 321, WEIRD_ZONE, TIME_ZONE_KEY, connectorSession()));
+            assertFunction("cast('2001-1-22 03:04:05 +07:09' as timestamp)", TIMESTAMP, sqlTimestampOf(2001, 1, 22, 3, 4, 5, 0, WEIRD_ZONE, TIME_ZONE_KEY, connectorSession()));
+            assertFunction("cast('2001-1-22 03:04 +07:09' as timestamp)", TIMESTAMP, sqlTimestampOf(2001, 1, 22, 3, 4, 0, 0, WEIRD_ZONE, TIME_ZONE_KEY, connectorSession()));
+            assertFunction("cast('2001-1-22 +07:09' as timestamp)", TIMESTAMP, sqlTimestampOf(2001, 1, 22, 0, 0, 0, 0, WEIRD_ZONE, TIME_ZONE_KEY, connectorSession()));
 
-        assertFunction("cast('\n\t 2001-1-22 03:04:05.321' as timestamp)",
-                TIMESTAMP,
-                new SqlTimestamp(new DateTime(2001, 1, 22, 3, 4, 5, 321, DATE_TIME_ZONE).getMillis(), TIME_ZONE_KEY));
-        assertFunction("cast('2001-1-22 03:04:05.321 \t\n' as timestamp)",
-                TIMESTAMP,
-                new SqlTimestamp(new DateTime(2001, 1, 22, 3, 4, 5, 321, DATE_TIME_ZONE).getMillis(), TIME_ZONE_KEY));
-        assertFunction("cast('\n\t 2001-1-22 03:04:05.321 \t\n' as timestamp)",
-                TIMESTAMP,
-                new SqlTimestamp(new DateTime(2001, 1, 22, 3, 4, 5, 321, DATE_TIME_ZONE).getMillis(), TIME_ZONE_KEY));
+            assertFunction("cast('2001-1-22 03:04:05.321 Asia/Oral' as timestamp)", TIMESTAMP, sqlTimestampOf(2001, 1, 22, 3, 4, 5, 321, ORAL_ZONE, TIME_ZONE_KEY, connectorSession()));
+            assertFunction("cast('2001-1-22 03:04:05 Asia/Oral' as timestamp)", TIMESTAMP, sqlTimestampOf(2001, 1, 22, 3, 4, 5, 0, ORAL_ZONE, TIME_ZONE_KEY, connectorSession()));
+            assertFunction("cast('2001-1-22 03:04 Asia/Oral' as timestamp)", TIMESTAMP, sqlTimestampOf(2001, 1, 22, 3, 4, 0, 0, ORAL_ZONE, TIME_ZONE_KEY, connectorSession()));
+            assertFunction("cast('2001-1-22 Asia/Oral' as timestamp)", TIMESTAMP, sqlTimestampOf(2001, 1, 22, 0, 0, 0, 0, ORAL_ZONE, TIME_ZONE_KEY, connectorSession()));
+        }
+        else {
+            functionAssertions.assertFunctionThrowsPrestoException(
+                    "cast('2001-1-22 03:04:05.321 +07:09' as timestamp)",
+                    INVALID_CAST_ARGUMENT,
+                    "Value cannot be cast to timestamp: 2001-1-22 03:04:05.321 +07:09");
+            functionAssertions.assertFunctionThrowsPrestoException(
+                    "cast('2001-1-22 03:04:05 +07:09' as timestamp)",
+                    INVALID_CAST_ARGUMENT,
+                    "Value cannot be cast to timestamp: 2001-1-22 03:04:05 +07:09");
+            functionAssertions.assertFunctionThrowsPrestoException(
+                    "cast('2001-1-22 03:04 +07:09' as timestamp)",
+                    INVALID_CAST_ARGUMENT,
+                    "Value cannot be cast to timestamp: 2001-1-22 03:04 +07:09");
+            functionAssertions.assertFunctionThrowsPrestoException(
+                    "cast('2001-1-22 +07:09' as timestamp)",
+                    INVALID_CAST_ARGUMENT,
+                    "Value cannot be cast to timestamp: 2001-1-22 +07:09");
+
+            functionAssertions.assertFunctionThrowsPrestoException(
+                    "cast('2001-1-22 03:04:05.321 Asia/Oral' as timestamp)",
+                    INVALID_CAST_ARGUMENT,
+                    "Value cannot be cast to timestamp: 2001-1-22 03:04:05.321 Asia/Oral");
+            functionAssertions.assertFunctionThrowsPrestoException(
+                    "cast('2001-1-22 03:04:05 Asia/Oral' as timestamp)",
+                    INVALID_CAST_ARGUMENT,
+                    "Value cannot be cast to timestamp: 2001-1-22 03:04:05 Asia/Oral");
+            functionAssertions.assertFunctionThrowsPrestoException(
+                    "cast('2001-1-22 03:04 Asia/Oral' as timestamp)",
+                    INVALID_CAST_ARGUMENT,
+                    "Value cannot be cast to timestamp: 2001-1-22 03:04 Asia/Oral");
+            functionAssertions.assertFunctionThrowsPrestoException(
+                    "cast('2001-1-22 Asia/Oral' as timestamp)",
+                    INVALID_CAST_ARGUMENT,
+                    "Value cannot be cast to timestamp: 2001-1-22 Asia/Oral");
+        }
     }
 
     @Test
@@ -266,10 +288,10 @@ public class TestTimestamp
     {
         assertFunction("greatest(TIMESTAMP '2013-03-30 01:05', TIMESTAMP '2012-03-30 01:05')",
                 TIMESTAMP,
-                new SqlTimestamp(new DateTime(2013, 3, 30, 1, 5, 0, 0, DATE_TIME_ZONE).getMillis(), TIME_ZONE_KEY));
+                sqlTimestampOf(2013, 3, 30, 1, 5, 0, 0, DATE_TIME_ZONE, TIME_ZONE_KEY, connectorSession()));
         assertFunction("greatest(TIMESTAMP '2013-03-30 01:05', TIMESTAMP '2012-03-30 01:05', TIMESTAMP '2012-05-01 01:05')",
                 TIMESTAMP,
-                new SqlTimestamp(new DateTime(2013, 3, 30, 1, 5, 0, 0, DATE_TIME_ZONE).getMillis(), TIME_ZONE_KEY));
+                sqlTimestampOf(2013, 3, 30, 1, 5, 0, 0, DATE_TIME_ZONE, TIME_ZONE_KEY, connectorSession()));
     }
 
     @Test
@@ -278,9 +300,9 @@ public class TestTimestamp
     {
         assertFunction("least(TIMESTAMP '2013-03-30 01:05', TIMESTAMP '2012-03-30 01:05')",
                 TIMESTAMP,
-                new SqlTimestamp(new DateTime(2012, 3, 30, 1, 5, 0, 0, DATE_TIME_ZONE).getMillis(), TIME_ZONE_KEY));
+                sqlTimestampOf(2012, 3, 30, 1, 5, 0, 0, DATE_TIME_ZONE, TIME_ZONE_KEY, connectorSession()));
         assertFunction("least(TIMESTAMP '2013-03-30 01:05', TIMESTAMP '2012-03-30 01:05', TIMESTAMP '2012-05-01 01:05')",
                 TIMESTAMP,
-                new SqlTimestamp(new DateTime(2012, 3, 30, 1, 5, 0, 0, DATE_TIME_ZONE).getMillis(), TIME_ZONE_KEY));
+                sqlTimestampOf(2012, 3, 30, 1, 5, 0, 0, DATE_TIME_ZONE, TIME_ZONE_KEY, connectorSession()));
     }
 }
